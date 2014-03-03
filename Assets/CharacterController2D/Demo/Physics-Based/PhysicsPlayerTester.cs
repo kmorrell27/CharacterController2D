@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
+using CharacterController;
 
 
 public class PhysicsPlayerTester : MonoBehaviour
@@ -14,7 +15,7 @@ public class PhysicsPlayerTester : MonoBehaviour
 	[HideInInspector]
 	private float normalizedHorizontalSpeed = 0;
 
-	private CharacterController2D _controller;
+	private PhysicsCharacterController2D _controller;
 	private Animator _animator;
 	private RaycastHit2D _lastControllerColliderHit;
 	private Vector3 _velocity;
@@ -29,31 +30,19 @@ public class PhysicsPlayerTester : MonoBehaviour
 	void Awake()
 	{
 		_animator = GetComponent<Animator>();
-		_controller = GetComponent<CharacterController2D>();
-
-		// listen to some events for illustration purposes
-		_controller.onControllerCollidedEvent += onControllerCollider;
-		_controller.onTriggerEnterEvent += onTriggerEnterEvent;
-		_controller.onTriggerExitEvent += onTriggerExitEvent;
+		_controller = GetComponent<PhysicsCharacterController2D>();
 	}
 
 
 	#region Event Listeners
-
-	void onControllerCollider( RaycastHit2D hit )
-	{
-		// logs any collider hits if uncommented. it gets noisy so it is commented out for the demo
-		//Debug.Log( "flags: " + _controller.collisionState + ", hit.normal: " + hit.normal );
-	}
-
-
-	void onTriggerEnterEvent( Collider2D col )
+	
+	void OnTriggerEnter2D( Collider2D col )
 	{
 		Debug.Log( "onTriggerEnterEvent: " + col.gameObject.name );
 	}
 
 
-	void onTriggerExitEvent( Collider2D col )
+	void OnTriggerExit2D( Collider2D col )
 	{
 		Debug.Log( "onTriggerExitEvent: " + col.gameObject.name );
 	}
@@ -74,11 +63,9 @@ public class PhysicsPlayerTester : MonoBehaviour
 
 	void FixedUpdate()
 	{
-		// grab our current _velocity to use as a base for all calculations
+		// grab our current velocity to use as a base for all calculations. Note that _controller.velocity is only a valid value
+		// at the beginning of FixedUpdate due to a bug with Rigidbody2D.velocity!
 		_velocity = _controller.velocity;
-		
-		if( _controller.isGrounded )
-			_velocity.y = 0;
 		
 		if( _right )
 		{
