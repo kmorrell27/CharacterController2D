@@ -64,7 +64,7 @@ public class CharacterController2D : MonoBehaviour
 	/// such as getting your input in Update and only calling move in FixedUpdate amonst others.
 	/// </summary>
 	public bool usePhysicsForMovement = false;
-	
+
 	[SerializeField]
 	[Range( 0.001f, 0.3f )]
 	private float _skinWidth = 0.02f;
@@ -96,7 +96,7 @@ public class CharacterController2D : MonoBehaviour
 	[SerializeField]
 	private LayerMask oneWayPlatformMask = 0;
 
-	
+
 	/// <summary>
 	/// the max slope angle that the CC2D can climb
 	/// </summary>
@@ -128,7 +128,7 @@ public class CharacterController2D : MonoBehaviour
 	/// to the player so that trigger messages can be received
 	/// </summary>
 	public bool createTriggerHelperGameObject = false;
-	
+
 	[Range( 0.8f, 0.999f )]
 	public float triggerHelperBoxColliderScale = 0.95f;
 
@@ -203,15 +203,15 @@ public class CharacterController2D : MonoBehaviour
 		if( onTriggerEnterEvent != null )
 			onTriggerEnterEvent( col );
 	}
-	
-	
+
+
 	public void OnTriggerStay2D( Collider2D col )
 	{
 		if( onTriggerStayEvent != null )
 			onTriggerStayEvent( col );
 	}
-	
-	
+
+
 	public void OnTriggerExit2D( Collider2D col )
 	{
 		if( onTriggerExitEvent != null )
@@ -219,14 +219,14 @@ public class CharacterController2D : MonoBehaviour
 	}
 
 	#endregion
-	
+
 
 	[System.Diagnostics.Conditional( "DEBUG_CC2D_RAYS" )]
 	private void DrawRay( Vector3 start, Vector3 dir, Color color )
 	{
 		Debug.DrawRay( start, dir, color );
 	}
-	
+
 
 	#region Public
 
@@ -234,29 +234,71 @@ public class CharacterController2D : MonoBehaviour
 	{
 		// save off our current grounded state
 		var wasGroundedBeforeMoving = collisionState.below;
-		
+
 		// clear our state
 		collisionState.reset();
 		_raycastHitsThisFrame.Clear();
-		
+
 		var desiredPosition = transform.position + deltaMovement;
 		primeRaycastOrigins( desiredPosition, deltaMovement );
-		
-		
+
+
 		// first, we check for a slope below us before moving
 		// only check slopes if we are going down and grounded
-		if( deltaMovement.y < 0 && wasGroundedBeforeMoving )
-			handleVerticalSlope( ref deltaMovement );
-		
+		//if( deltaMovement.y < 0 && wasGroundedBeforeMoving )
+		//	handleVerticalSlope( ref deltaMovement );
+
+
+
+#if UNITY_4_5 || UNITY_4_6
+		boxCollider.enabled = true;
+		var isGoingRight = deltaMovement.x > 0;
+		var isGoingUp = deltaMovement.y > 0;
+
+		//Debug.Log( "no hor: " + ( deltaMovement.x == 0 ) );
+		//Debug.Log( "no ver: " + ( deltaMovement.y == 0 ) );
+
+		var skinWidthVector = new Vector3( isGoingRight ? skinWidth : -skinWidth, isGoingUp ? skinWidth : -skinWidth );
+		var posMod = Vector3.zero;
+		if( wasGroundedBeforeMoving )
+			posMod.y += skinWidth;
+
+		var scaledColliderSize = new Vector2( boxCollider.size.x * Mathf.Abs( transform.localScale.x ), boxCollider.size.y * Mathf.Abs( transform.localScale.y ) );
+		var hits = Physics2D.BoxCastAll( transform.position + posMod, scaledColliderSize, 0f, deltaMovement.normalized, deltaMovement.magnitude, platformMask );
+		if( hits.Length > 0 )
+		{
+			if( hits.Length > 1 )
+				Debug.Log( "hits: " + hits.Length );
+
+			foreach( var hit in hits )
+			{
+				//Debug.Log( "fraction: " + hit.fraction );
+				transform.position = hit.centroid;
+				collisionState.below = true;
+				//Debug.Log( "centroid: " + hit.centroid );
+			}
+		}
+		else
+		{
+			transform.Translate( deltaMovement );
+			velocity = deltaMovement / Time.deltaTime;
+		}
+		return;
+#endif
+
+
+
+
+
 		// now we check movement in the horizontal dir
 		if( deltaMovement.x != 0 )
 			moveHorizontally( ref deltaMovement );
-		
+
 		// next, check movement in the vertical dir
 		if( deltaMovement.y != 0 )
 			moveVertically( ref deltaMovement );
-		
-		
+
+
 		// move then update our state
 		if( usePhysicsForMovement )
 		{
@@ -272,11 +314,11 @@ public class CharacterController2D : MonoBehaviour
 			transform.Translate( deltaMovement );
 			velocity = deltaMovement / Time.deltaTime;
 		}
-		
+
 		// set our becameGrounded state based on the previous and current collision state
 		if( !wasGroundedBeforeMoving && collisionState.below )
 			collisionState.becameGroundedThisFrame = true;
-		
+
 		// send off the collision events if we have a listener
 		if( onControllerCollidedEvent != null )
 		{
@@ -296,7 +338,7 @@ public class CharacterController2D : MonoBehaviour
 		// horizontal
 		var colliderUseableHeight = boxCollider.size.y * Mathf.Abs( transform.localScale.y ) - ( 2f * _skinWidth );
 		_verticalDistanceBetweenRays = colliderUseableHeight / ( totalHorizontalRays - 1 );
-		
+
 		// vertical
 		var colliderUseableWidth = boxCollider.size.x * Mathf.Abs( transform.localScale.x ) - ( 2f * _skinWidth );
 		_horizontalDistanceBetweenRays = colliderUseableWidth / ( totalVerticalRays - 1 );
@@ -528,7 +570,7 @@ public class CharacterController2D : MonoBehaviour
 
 		// the ray distance is based on our slopeLimit
 		var slopeCheckRayDistance = _slopeLimitTangent * ( _raycastOrigins.bottomRight.x - centerOfCollider );
-		
+
 		var slopeRay = new Vector2( centerOfCollider, _raycastOrigins.bottomLeft.y );
 		DrawRay( slopeRay, rayDirection * slopeCheckRayDistance, Color.yellow );
 		_raycastHit = Physics2D.Raycast( slopeRay, rayDirection, slopeCheckRayDistance, platformMask );
@@ -554,6 +596,6 @@ public class CharacterController2D : MonoBehaviour
 	}
 
 	#endregion
-	
-	
+
+
 }
