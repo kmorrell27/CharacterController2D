@@ -186,10 +186,6 @@ public class CharacterController2D : MonoBehaviour
 		boxCollider = GetComponent<BoxCollider2D>();
 		rigidBody2D = GetComponent<Rigidbody2D>();
 
-		// we dont have a bounds property until Unity 4.5+ so we really don't need the BoxCollider2D to be active since we just use
-		// it for it's size and center properties so might as well remove it from play
-		boxCollider.enabled = false;
-
 		if( createTriggerHelperGameObject )
 			createTriggerHelper();
 
@@ -234,6 +230,7 @@ public class CharacterController2D : MonoBehaviour
 	{
 		// save off our current grounded state
 		var wasGroundedBeforeMoving = collisionState.below;
+		var previousPosition = transform.position;
 
 		// clear our state
 		collisionState.reset();
@@ -250,41 +247,41 @@ public class CharacterController2D : MonoBehaviour
 
 
 
-#if UNITY_4_5 || UNITY_4_6
-		boxCollider.enabled = true;
-		var isGoingRight = deltaMovement.x > 0;
-		var isGoingUp = deltaMovement.y > 0;
-
-		//Debug.Log( "no hor: " + ( deltaMovement.x == 0 ) );
-		//Debug.Log( "no ver: " + ( deltaMovement.y == 0 ) );
-
-		var skinWidthVector = new Vector3( isGoingRight ? skinWidth : -skinWidth, isGoingUp ? skinWidth : -skinWidth );
-		var posMod = Vector3.zero;
-		if( wasGroundedBeforeMoving )
-			posMod.y += skinWidth;
-
-		var scaledColliderSize = new Vector2( boxCollider.size.x * Mathf.Abs( transform.localScale.x ), boxCollider.size.y * Mathf.Abs( transform.localScale.y ) );
-		var hits = Physics2D.BoxCastAll( transform.position + posMod, scaledColliderSize, 0f, deltaMovement.normalized, deltaMovement.magnitude, platformMask );
-		if( hits.Length > 0 )
-		{
-			if( hits.Length > 1 )
-				Debug.Log( "hits: " + hits.Length );
-
-			foreach( var hit in hits )
-			{
-				//Debug.Log( "fraction: " + hit.fraction );
-				transform.position = hit.centroid;
-				collisionState.below = true;
-				//Debug.Log( "centroid: " + hit.centroid );
-			}
-		}
-		else
-		{
-			transform.Translate( deltaMovement );
-			velocity = deltaMovement / Time.deltaTime;
-		}
-		return;
-#endif
+//#if UNITY_4_5 || UNITY_4_6
+//		boxCollider.enabled = true;
+//		var isGoingRight = deltaMovement.x > 0;
+//		var isGoingUp = deltaMovement.y > 0;
+//
+//		//Debug.Log( "no hor: " + ( deltaMovement.x == 0 ) );
+//		//Debug.Log( "no ver: " + ( deltaMovement.y == 0 ) );
+//
+//		var skinWidthVector = new Vector3( isGoingRight ? skinWidth : -skinWidth, isGoingUp ? skinWidth : -skinWidth );
+//		var posMod = Vector3.zero;
+//		if( wasGroundedBeforeMoving )
+//			posMod.y += skinWidth;
+//
+//		var scaledColliderSize = new Vector2( boxCollider.size.x * Mathf.Abs( transform.localScale.x ), boxCollider.size.y * Mathf.Abs( transform.localScale.y ) );
+//		var hits = Physics2D.BoxCastAll( transform.position + posMod, scaledColliderSize, 0f, deltaMovement.normalized, deltaMovement.magnitude, platformMask );
+//		if( hits.Length > 0 )
+//		{
+//			if( hits.Length > 1 )
+//				Debug.Log( "hits: " + hits.Length );
+//
+//			foreach( var hit in hits )
+//			{
+//				//Debug.Log( "fraction: " + hit.fraction );
+//				transform.position = hit.centroid;
+//				collisionState.below = true;
+//				//Debug.Log( "centroid: " + hit.centroid );
+//			}
+//		}
+//		else
+//		{
+//			transform.Translate( deltaMovement );
+//			velocity = deltaMovement / Time.deltaTime;
+//		}
+//		return;
+//#endif
 
 
 
@@ -292,11 +289,19 @@ public class CharacterController2D : MonoBehaviour
 
 		// now we check movement in the horizontal dir
 		if( deltaMovement.x != 0 )
+		{
+			if( wasGroundedBeforeMoving )
+				transform.Translate( 0, skinWidth, 0 );
+
 			moveHorizontally( ref deltaMovement );
+
+			if( wasGroundedBeforeMoving )
+				transform.Translate( 0, -skinWidth, 0 );
+		}
 
 		// next, check movement in the vertical dir
 		if( deltaMovement.y != 0 )
-			moveVertically( ref deltaMovement );
+			moveVertically( ref deltaMovement, wasGroundedBeforeMoving );
 
 
 		// move then update our state
@@ -312,7 +317,7 @@ public class CharacterController2D : MonoBehaviour
 		else
 		{
 			transform.Translate( deltaMovement );
-			velocity = deltaMovement / Time.deltaTime;
+			velocity = ( transform.position - previousPosition ) / Time.deltaTime;
 		}
 
 		// set our becameGrounded state based on the previous and current collision state
@@ -420,47 +425,33 @@ public class CharacterController2D : MonoBehaviour
 		var isGoingRight = deltaMovement.x > 0;
 		var rayDistance = Mathf.Abs( deltaMovement.x ) + _skinWidth;
 		var rayDirection = isGoingRight ? Vector2.right : -Vector2.right;
-		var initialRayOrigin = isGoingRight ? _raycastOrigins.bottomRight : _raycastOrigins.bottomLeft;
+		var posMod = isGoingRight ? new Vector3( -skinWidth, 0, 0 ) : new Vector3( skinWidth, 0, 0 );
 
-		for( var i = 0; i < totalHorizontalRays; i++ )
+		var scaledColliderSize = new Vector2( boxCollider.size.x * Mathf.Abs( transform.localScale.x ), boxCollider.size.y * Mathf.Abs( transform.localScale.y ) );
+		var hits = Physics2D.BoxCastAll( transform.position + posMod, scaledColliderSize, 0f, rayDirection, Mathf.Abs( deltaMovement.x ) + skinWidth, platformMask );
+		if( hits.Length > 0 )
 		{
-			var ray = new Vector2( initialRayOrigin.x, initialRayOrigin.y + i * _verticalDistanceBetweenRays );
+			if( hits.Length > 1 )
+				Debug.Log( "hits: " + hits.Length );
 
-			DrawRay( ray, rayDirection * rayDistance, Color.red );
-			_raycastHit = Physics2D.Raycast( ray, rayDirection, rayDistance, platformMask & ~oneWayPlatformMask );
-			if( _raycastHit )
+			foreach( var hit in hits )
 			{
-				// the bottom ray can hit slopes but no other ray can so we have special handling for those cases
-				if( i == 0 && handleHorizontalSlope( ref deltaMovement, Vector2.Angle( _raycastHit.normal, Vector2.up ), isGoingRight ) )
-				{
-					_raycastHitsThisFrame.Add( _raycastHit );
-					break;
-				}
+				//Debug.Log( "fraction: " + hit.fraction );
+				transform.position = hit.centroid;
 
-				// set our new deltaMovement and recalculate the rayDistance taking it into account
-				deltaMovement.x = _raycastHit.point.x - ray.x;
-				rayDistance = Mathf.Abs( deltaMovement.x );
-
-				// remember to remove the skinWidth from our deltaMovement
 				if( isGoingRight )
-				{
-					deltaMovement.x -= _skinWidth;
 					collisionState.right = true;
-				}
 				else
-				{
-					deltaMovement.x += _skinWidth;
 					collisionState.left = true;
-				}
-
-				_raycastHitsThisFrame.Add( _raycastHit );
-
-				// we add a small fudge factor for the float operations here. if our rayDistance is smaller
-				// than the width + fudge bail out because we have a direct impact
-				if( rayDistance < _skinWidth + kSkinWidthFloatFudgeFactor )
-					break;
+				//Debug.Log( "centroid: " + hit.centroid );
 			}
 		}
+		else
+		{
+			transform.Translate( deltaMovement.x, 0, 0 );
+		}
+
+		deltaMovement.x = 0;
 	}
 
 
@@ -507,53 +498,44 @@ public class CharacterController2D : MonoBehaviour
 	}
 
 
-	private void moveVertically( ref Vector3 deltaMovement )
+	private void moveVertically( ref Vector3 deltaMovement, bool wasGroundedBeforeMoving )
 	{
 		var isGoingUp = deltaMovement.y > 0;
-		var rayDistance = Mathf.Abs( deltaMovement.y ) + _skinWidth;
+		var rayDistance = Mathf.Abs( deltaMovement.y );
 		var rayDirection = isGoingUp ? Vector2.up : -Vector2.up;
-		var initialRayOrigin = isGoingUp ? _raycastOrigins.topLeft : _raycastOrigins.bottomLeft;
-
-		// apply our horizontal deltaMovement here so that we do our raycast from the actual position we would be in if we had moved
-		initialRayOrigin.x += deltaMovement.x;
+		var posMod = wasGroundedBeforeMoving && isGoingUp ? new Vector3( 0, skinWidth, 0 ) : Vector3.zero;
 
 		// if we are moving up, we should ignore the layers in oneWayPlatformMask
 		var mask = platformMask;
 		if( isGoingUp )
 			mask &= ~oneWayPlatformMask;
 
-		for( var i = 0; i < totalVerticalRays; i++ )
+
+		var scaledColliderSize = new Vector2( boxCollider.size.x * Mathf.Abs( transform.localScale.x ), boxCollider.size.y * Mathf.Abs( transform.localScale.y ) );
+		var hits = Physics2D.BoxCastAll( transform.position + posMod, scaledColliderSize, 0f, rayDirection, Mathf.Abs( deltaMovement.y ), mask );
+		if( hits.Length > 0 )
 		{
-			var ray = new Vector2( initialRayOrigin.x + i * _horizontalDistanceBetweenRays, initialRayOrigin.y );
+			if( hits.Length > 1 )
+				Debug.Log( "hits: " + hits.Length );
 
-			DrawRay( ray, rayDirection * rayDistance, Color.red );
-			_raycastHit = Physics2D.Raycast( ray, rayDirection, rayDistance, mask );
-			if( _raycastHit )
+			foreach( var hit in hits )
 			{
-				// set our new deltaMovement and recalculate the rayDistance taking it into account
-				deltaMovement.y = _raycastHit.point.y - ray.y;
-				rayDistance = Mathf.Abs( deltaMovement.y );
+				//Debug.Log( "fraction: " + hit.fraction );
+				transform.position = hit.centroid;
 
-				// remember to remove the skinWidth from our deltaMovement
 				if( isGoingUp )
-				{
-					deltaMovement.y -= _skinWidth;
 					collisionState.above = true;
-				}
 				else
-				{
-					deltaMovement.y += _skinWidth;
 					collisionState.below = true;
-				}
-
-				_raycastHitsThisFrame.Add( _raycastHit );
-
-				// we add a small fudge factor for the float operations here. if our rayDistance is smaller
-				// than the width + fudge bail out because we have a direct impact
-				if( rayDistance < _skinWidth + kSkinWidthFloatFudgeFactor )
-					return;
+				//Debug.Log( "centroid: " + hit.centroid );
 			}
 		}
+		else
+		{
+			transform.Translate( 0, deltaMovement.y, 0 );
+		}
+
+		deltaMovement.y = 0;
 	}
 
 
