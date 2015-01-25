@@ -102,6 +102,8 @@ public class DemoScene : MonoBehaviour
 		{
 			_velocity.y = Mathf.Sqrt( 2f * jumpHeight * -gravity );
 			_animator.Play( Animator.StringToHash( "Jump" ) );
+		} else if (!_controller.isGrounded && _velocity.y > 0 && !Input.GetKey (KeyCode.UpArrow)) {
+			_velocity.y = 0;
 		}
 
 
